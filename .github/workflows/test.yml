@@ -1,0 +1,20 @@
+name: テスト - Notionにページ作成
+
+on:
+  workflow_dispatch:  # GitHubのActionsタブから手動実行
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: テストページ作成
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
+        run: python scripts/test_notion.py
