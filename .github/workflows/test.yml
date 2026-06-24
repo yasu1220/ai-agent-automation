@@ -16,5 +16,6 @@ jobs:
       - name: テストページ作成
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_KANBAN_DB_ID: ${{ secrets.NOTION_KANBAN_DB_ID }}
           NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
         run: python scripts/create_daily_memo.py
