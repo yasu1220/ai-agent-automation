@@ -63,8 +63,8 @@ def create_daily_memo(tasks):
     return res["url"]
 
 def main():
-    tasks = get_incomplete_tasks()
-    print(f"未完了タスク: {len(tasks)}件")
+    tasks = get_incomplete_tasks()[:3]  # 最大3件
+    print(f"未完了タスク（最大3件）: {len(tasks)}件")
     for t in tasks:
         print(f"  - {t['name']}")
 

@@ -17,4 +17,4 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
-        run: python scripts/test_notion.py
+        run: python scripts/create_daily_memo.py
