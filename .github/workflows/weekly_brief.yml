@@ -1,0 +1,25 @@
+name: 週次ブリーフ自動生成
+
+on:
+  schedule:
+    # 毎週月曜7時（日本時間）= UTC 日曜22時
+    - cron: '0 22 * * 0'
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  create-weekly-brief:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 週次ブリーフ生成
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_KANBAN_DB_ID: ${{ secrets.NOTION_KANBAN_DB_ID }}
+          NOTION_WEEKLY_PLAN_DB_ID: ${{ secrets.NOTION_WEEKLY_PLAN_DB_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/create_weekly_brief.py
