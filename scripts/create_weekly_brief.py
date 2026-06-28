@@ -70,7 +70,7 @@ def call_claude(prompt):
     }
     body = {
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 2048,
+        "max_tokens": 4096,
         "messages": [{"role": "user", "content": prompt}]
     }
     data = json.dumps(body).encode()
@@ -89,7 +89,9 @@ def get_week_label():
 
 
 def generate_tasks_and_summary(existing_tasks):
-    task_list = "\n".join(f"- {t}" for t in existing_tasks) if existing_tasks else "（未完了タスクなし）"
+    # 最新10件のみ参照（プロンプト長さを抑制）
+    recent_tasks = existing_tasks[:10]
+    task_list = "\n".join(f"- {t}" for t in recent_tasks) if recent_tasks else "（未完了タスクなし）"
 
     prompt = f"""あなたは経営者のビジネスアシスタントです。
 以下の戦略と現在の未完了タスクを踏まえて、今週の方針と取り組むべきサブタスクを生成してください。
