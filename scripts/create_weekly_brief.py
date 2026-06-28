@@ -115,6 +115,7 @@ def generate_tasks_and_summary(existing_tasks):
 - サブタスクは毎日3件ずつ消化できる粒度（1〜2時間で完結する具体的なアクション）
 - サブタスク名は20文字以内
 - カテゴリは上記カテゴリ一覧から選択
+- memoは「何をどうやるか」を具体的に2〜3文で書く（ツール名・手順・成果物など）
 
 ## 出力形式
 以下のJSON形式のみで出力してください。説明文は不要です：
@@ -125,8 +126,8 @@ def generate_tasks_and_summary(existing_tasks):
       "name": "親テーマ名",
       "category": "カテゴリ名",
       "subtasks": [
-        {{"name": "サブタスク名（20文字以内）"}},
-        {{"name": "サブタスク名（20文字以内）"}}
+        {{"name": "サブタスク名（20文字以内）", "memo": "何をどうやるかの具体的な説明（2〜3文）"}},
+        {{"name": "サブタスク名（20文字以内）", "memo": "何をどうやるかの具体的な説明（2〜3文）"}}
       ]
     }}
   ]
@@ -142,11 +143,23 @@ def generate_tasks_and_summary(existing_tasks):
 
 
 def add_subtasks_to_kanban(themes):
-    """サブタスクをカンバンに追加。タスク名はシンプルに、カテゴリプロパティで分類"""
+    """サブタスクをカンバンに追加。タスク名はシンプルに、memoをページbodyに書き込む"""
     all_task_ids = []
     for theme in themes:
         category = theme["category"]
         for st in theme["subtasks"]:
+            memo = st.get("memo", "")
+            children = []
+            if memo:
+                children = [
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{"type": "text", "text": {"content": memo}}]
+                        }
+                    }
+                ]
             body = {
                 "parent": {"database_id": KANBAN_DB_ID},
                 "properties": {
@@ -159,7 +172,8 @@ def add_subtasks_to_kanban(themes):
                     "カテゴリ": {
                         "select": {"name": category}
                     }
-                }
+                },
+                "children": children
             }
             res = notion_request("POST", "/pages", body)
             all_task_ids.append(res["id"])
