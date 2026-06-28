@@ -141,19 +141,17 @@ def generate_tasks_and_summary(existing_tasks):
     return json.loads(json_str)
 
 
-def add_subtasks_to_kanban(themes, week_label):
-    """サブタスクをカンバンに追加し、IDと親テーマのマッピングを返す"""
+def add_subtasks_to_kanban(themes):
+    """サブタスクをカンバンに追加。タスク名はシンプルに、カテゴリプロパティで分類"""
     all_task_ids = []
     for theme in themes:
         category = theme["category"]
-        theme_name = theme["name"]
         for st in theme["subtasks"]:
-            task_name = f"[{theme_name}] {st['name']}"
             body = {
                 "parent": {"database_id": KANBAN_DB_ID},
                 "properties": {
                     "タスク名": {
-                        "title": [{"text": {"content": task_name}}]
+                        "title": [{"text": {"content": st["name"]}}]
                     },
                     "完了": {
                         "checkbox": False
@@ -165,20 +163,40 @@ def add_subtasks_to_kanban(themes, week_label):
             }
             res = notion_request("POST", "/pages", body)
             all_task_ids.append(res["id"])
-            print(f"  カンバン追加: {task_name} [{category}]")
+            print(f"  カンバン追加: {st['name']} [{category}]")
     return all_task_ids
 
 
-def create_weekly_plan(week_label, date_str, summary, themes, task_ids):
-    # 今週やることの本文：テーマ＋サブタスク構造で記述
-    lines = [summary, "", "【今週のテーマとタスク】"]
+def build_page_content(summary, themes):
+    """ページbody用のNotionマークダウンを生成"""
+    THEME_ICONS = {
+        "法人営業": "🏢",
+        "体験セッション": "🧊",
+        "AIエージェント": "🤖",
+        "コーチング": "💬",
+        "組織開発": "🌱",
+        "SNS/YouTube": "📱",
+        "内部整備": "🔧",
+    }
+    lines = [
+        "## 🎯 今週の方針",
+        summary,
+        "",
+        "---",
+        "",
+        "## 📋 テーマ別タスク",
+    ]
     for theme in themes:
-        lines.append(f"\n■ {theme['name']}（{theme['category']}）")
+        icon = THEME_ICONS.get(theme["category"], "📌")
+        lines.append(f"\n### {icon} {theme['name']}")
         for st in theme["subtasks"]:
-            lines.append(f"  ・{st['name']}")
-    content = "\n".join(lines)
+            lines.append(f"- {st['name']}")
+    return "\n".join(lines)
 
+
+def create_weekly_plan(week_label, date_str, summary, themes, task_ids):
     relations = [{"id": task_id} for task_id in task_ids]
+    page_content = build_page_content(summary, themes)
 
     body = {
         "parent": {"database_id": WEEKLY_PLAN_DB_ID},
@@ -190,15 +208,37 @@ def create_weekly_plan(week_label, date_str, summary, themes, task_ids):
                 "date": {"start": date_str}
             },
             "今週やること": {
-                "rich_text": [{"text": {"content": content}}]
+                "rich_text": [{"text": {"content": summary}}]
             },
             "参照タスク": {
                 "relation": relations
             }
-        }
+        },
+        "children": _markdown_to_blocks(page_content)
     }
     res = notion_request("POST", "/pages", body)
     return res["url"]
+
+
+def _markdown_to_blocks(md):
+    """シンプルなMarkdown → Notion blocksに変換"""
+    blocks = []
+    for line in md.split("\n"):
+        if line.startswith("### "):
+            blocks.append({"object": "block", "type": "heading_3",
+                           "heading_3": {"rich_text": [{"type": "text", "text": {"content": line[4:]}}]}})
+        elif line.startswith("## "):
+            blocks.append({"object": "block", "type": "heading_2",
+                           "heading_2": {"rich_text": [{"type": "text", "text": {"content": line[3:]}}]}})
+        elif line.startswith("- "):
+            blocks.append({"object": "block", "type": "bulleted_list_item",
+                           "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": line[2:]}}]}})
+        elif line.strip() == "---":
+            blocks.append({"object": "block", "type": "divider", "divider": {}})
+        elif line.strip():
+            blocks.append({"object": "block", "type": "paragraph",
+                           "paragraph": {"rich_text": [{"type": "text", "text": {"content": line}}]}})
+    return blocks
 
 
 def main():
@@ -218,7 +258,7 @@ def main():
     print(f"生成テーマ: {len(themes)}件 / サブタスク合計: {total}件")
 
     print("カンバンにサブタスクを追加中...")
-    task_ids = add_subtasks_to_kanban(themes, week_label)
+    task_ids = add_subtasks_to_kanban(themes)
 
     print("週間プランを作成中...")
     url = create_weekly_plan(week_label, date_str, summary, themes, task_ids)
