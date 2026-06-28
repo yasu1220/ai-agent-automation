@@ -1,6 +1,6 @@
 """
 毎週月曜実行: カンバンの未完了タスクと戦略を元に、今週やることをClaudeが生成して
-週次ブリーフに書き込み、カンバンに今週のタスクを追加する
+週次ブリーフに書き込み、カンバンにサブタスク約20件を追加する
 """
 import os
 import json
@@ -70,7 +70,7 @@ def call_claude(prompt):
     }
     body = {
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 1024,
+        "max_tokens": 2048,
         "messages": [{"role": "user", "content": prompt}]
     }
     data = json.dumps(body).encode()
@@ -92,7 +92,7 @@ def generate_tasks_and_summary(existing_tasks):
     task_list = "\n".join(f"- {t}" for t in existing_tasks) if existing_tasks else "（未完了タスクなし）"
 
     prompt = f"""あなたは経営者のビジネスアシスタントです。
-以下の戦略と現在の未完了タスクを踏まえて、今週新たに取り組むべきタスクを3件提案してください。
+以下の戦略と現在の未完了タスクを踏まえて、今週の方針と取り組むべきサブタスクを生成してください。
 
 ## 戦略
 {STRATEGY}
@@ -100,14 +100,35 @@ def generate_tasks_and_summary(existing_tasks):
 ## 現在の未完了タスク（既存）
 {task_list}
 
+## カテゴリ一覧
+- 法人営業
+- 体験セッション
+- AIエージェント
+- コーチング
+- 組織開発
+- SNS/YouTube
+- 内部整備
+
+## 出力ルール
+- 今週の方針を1〜2文（50文字以内）で書く
+- 親テーマを3件設定し、それぞれに具体的なサブタスクを6〜7件ずつ生成する（合計約20件）
+- サブタスクは毎日3件ずつ消化できる粒度（1〜2時間で完結する具体的なアクション）
+- サブタスク名は20文字以内
+- カテゴリは上記カテゴリ一覧から選択
+
 ## 出力形式
 以下のJSON形式のみで出力してください。説明文は不要です：
 {{
-  "summary": "今週の方針を1〜2文で（50文字以内）",
-  "tasks": [
-    {{"name": "タスク名（20文字以内）", "priority": "高"}},
-    {{"name": "タスク名（20文字以内）", "priority": "中"}},
-    {{"name": "タスク名（20文字以内）", "priority": "低"}}
+  "summary": "今週の方針（50文字以内）",
+  "themes": [
+    {{
+      "name": "親テーマ名",
+      "category": "カテゴリ名",
+      "subtasks": [
+        {{"name": "サブタスク名（20文字以内）"}},
+        {{"name": "サブタスク名（20文字以内）"}}
+      ]
+    }}
   ]
 }}"""
 
@@ -120,31 +141,42 @@ def generate_tasks_and_summary(existing_tasks):
     return json.loads(json_str)
 
 
-def add_tasks_to_kanban(tasks, week_label):
-    added_ids = []
-    for t in tasks:
-        body = {
-            "parent": {"database_id": KANBAN_DB_ID},
-            "properties": {
-                "タスク名": {
-                    "title": [{"text": {"content": f"[{week_label}] {t['name']}"}}]
-                },
-                "完了": {
-                    "checkbox": False
+def add_subtasks_to_kanban(themes, week_label):
+    """サブタスクをカンバンに追加し、IDと親テーマのマッピングを返す"""
+    all_task_ids = []
+    for theme in themes:
+        category = theme["category"]
+        theme_name = theme["name"]
+        for st in theme["subtasks"]:
+            task_name = f"[{theme_name}] {st['name']}"
+            body = {
+                "parent": {"database_id": KANBAN_DB_ID},
+                "properties": {
+                    "タスク名": {
+                        "title": [{"text": {"content": task_name}}]
+                    },
+                    "完了": {
+                        "checkbox": False
+                    },
+                    "カテゴリ": {
+                        "select": {"name": category}
+                    }
                 }
             }
-        }
-        res = notion_request("POST", "/pages", body)
-        added_ids.append(res["id"])
-        print(f"  カンバン追加: {t['name']} (優先度:{t['priority']})")
-    return added_ids
+            res = notion_request("POST", "/pages", body)
+            all_task_ids.append(res["id"])
+            print(f"  カンバン追加: {task_name} [{category}]")
+    return all_task_ids
 
 
-def create_weekly_plan(week_label, date_str, summary, tasks, task_ids):
-    task_lines = "\n".join(
-        f"{i+1}. 【{t['priority']}】{t['name']}" for i, t in enumerate(tasks)
-    )
-    content = f"{summary}\n\n【今週のタスク】\n{task_lines}"
+def create_weekly_plan(week_label, date_str, summary, themes, task_ids):
+    # 今週やることの本文：テーマ＋サブタスク構造で記述
+    lines = [summary, "", "【今週のテーマとタスク】"]
+    for theme in themes:
+        lines.append(f"\n■ {theme['name']}（{theme['category']}）")
+        for st in theme["subtasks"]:
+            lines.append(f"  ・{st['name']}")
+    content = "\n".join(lines)
 
     relations = [{"id": task_id} for task_id in task_ids]
 
@@ -180,14 +212,16 @@ def main():
     result = generate_tasks_and_summary(existing_tasks)
 
     summary = result["summary"]
-    new_tasks = result["tasks"]
+    themes = result["themes"]
+    total = sum(len(t["subtasks"]) for t in themes)
     print(f"今週の方針: {summary}")
+    print(f"生成テーマ: {len(themes)}件 / サブタスク合計: {total}件")
 
-    print("カンバンにタスクを追加中...")
-    task_ids = add_tasks_to_kanban(new_tasks, week_label)
+    print("カンバンにサブタスクを追加中...")
+    task_ids = add_subtasks_to_kanban(themes, week_label)
 
     print("週間プランを作成中...")
-    url = create_weekly_plan(week_label, date_str, summary, new_tasks, task_ids)
+    url = create_weekly_plan(week_label, date_str, summary, themes, task_ids)
     print(f"週次ブリーフ作成: {url}")
     print("=== 完了 ===")
 
