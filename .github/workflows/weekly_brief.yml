@@ -2,9 +2,9 @@ name: 週次ブリーフ自動生成
 
 on:
   schedule:
-    # 毎週月曜7時（日本時間）= UTC 日曜22時
-    - cron: '0 22 * * 0'
-  workflow_dispatch:  # 手動実行も可能
+    # 毎週月曜5:30（日本時間）= UTC 日曜20:30
+    - cron: '30 20 * * 0'
+  workflow_dispatch:
 
 jobs:
   create-weekly-brief:
@@ -21,5 +21,10 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_KANBAN_DB_ID: ${{ secrets.NOTION_KANBAN_DB_ID }}
           NOTION_WEEKLY_PLAN_DB_ID: ${{ secrets.NOTION_WEEKLY_PLAN_DB_ID }}
+          NOTION_MONTHLY_REPORT_DB_ID: ${{ secrets.NOTION_MONTHLY_REPORT_DB_ID }}
+          NOTION_MEMORY_PAGE_ID: ${{ secrets.NOTION_MEMORY_PAGE_ID }}
+          NOTION_STRATEGY_PAGE_ID: ${{ secrets.NOTION_STRATEGY_PAGE_ID }}
+          NOTION_PHILOSOPHY_PAGE_ID: ${{ secrets.NOTION_PHILOSOPHY_PAGE_ID }}
+          NOTION_SELF_IMAGE_PAGE_ID: ${{ secrets.NOTION_SELF_IMAGE_PAGE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/create_weekly_brief.py

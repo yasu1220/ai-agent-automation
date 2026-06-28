@@ -1,40 +1,29 @@
 """
-毎週月曜実行: カンバンの未完了タスクと戦略を元に、今週やることをClaudeが生成して
-週次ブリーフに書き込み、カンバンにサブタスク約20件を追加する
+毎週月曜5:30実行: 資料置き場（メモリー・戦略・哲学・自己像）＋月次達成度＋カンバンを元に
+週間プランとサブタスク約20件を生成してNotionに書き込む
 """
 import os
 import json
 import urllib.request
-import urllib.error
 from datetime import date, timedelta
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 KANBAN_DB_ID = os.environ["NOTION_KANBAN_DB_ID"]
 WEEKLY_PLAN_DB_ID = os.environ["NOTION_WEEKLY_PLAN_DB_ID"]
+MONTHLY_REPORT_DB_ID = os.environ["NOTION_MONTHLY_REPORT_DB_ID"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+
+# 資料置き場のページID
+MEMORY_PAGE_ID = os.environ["NOTION_MEMORY_PAGE_ID"]
+STRATEGY_PAGE_ID = os.environ["NOTION_STRATEGY_PAGE_ID"]
+PHILOSOPHY_PAGE_ID = os.environ["NOTION_PHILOSOPHY_PAGE_ID"]
+SELF_IMAGE_PAGE_ID = os.environ["NOTION_SELF_IMAGE_PAGE_ID"]
 
 NOTION_HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
     "Content-Type": "application/json",
     "Notion-Version": "2022-06-28",
 }
-
-STRATEGY = """
-## ビジョン・ミッション
-- Vision: 人間が生きやすい世界を創る
-- Mission: 人・組織・社会の変容を起こす
-
-## 2026年フェーズ計画
-- フェーズ1（5〜7月）仕込み期: 自己の内面・外面を磨き、8月のバズに対応する準備構築
-- 6月目標: 月商40万円（法人1件×30万、個人5人×2万）、法人登記
-- 7月目標: 月商40万円、EX旅
-
-## 事業領域
-- コーチング / 組織開発
-- 極限体験（アイスバス・呼吸法）
-- 瞑想サービス
-- パブリッシング（YouTube / SNS）
-"""
 
 
 def notion_request(method, path, body=None):
@@ -43,22 +32,6 @@ def notion_request(method, path, body=None):
     req = urllib.request.Request(url, data=data, headers=NOTION_HEADERS, method=method)
     with urllib.request.urlopen(req) as res:
         return json.loads(res.read())
-
-
-def get_incomplete_tasks():
-    body = {
-        "filter": {
-            "property": "完了",
-            "checkbox": {"equals": False}
-        }
-    }
-    res = notion_request("POST", f"/databases/{KANBAN_DB_ID}/query", body)
-    tasks = []
-    for page in res.get("results", []):
-        title = page["properties"]["タスク名"]["title"]
-        name = title[0]["plain_text"] if title else "（無題）"
-        tasks.append(name)
-    return tasks
 
 
 def call_claude(prompt):
@@ -80,6 +53,75 @@ def call_claude(prompt):
         return result["content"][0]["text"]
 
 
+def get_page_text(page_id):
+    """Notionページのテキスト内容を取得"""
+    res = notion_request("GET", f"/blocks/{page_id}/children")
+    lines = []
+    for block in res.get("results", []):
+        block_type = block["type"]
+        if block_type in ("heading_1", "heading_2", "heading_3", "paragraph",
+                          "bulleted_list_item", "numbered_list_item"):
+            rich_text = block[block_type].get("rich_text", [])
+            text = "".join(t["plain_text"] for t in rich_text)
+            if block_type == "heading_1":
+                lines.append(f"# {text}")
+            elif block_type == "heading_2":
+                lines.append(f"## {text}")
+            elif block_type == "heading_3":
+                lines.append(f"### {text}")
+            elif block_type in ("bulleted_list_item", "numbered_list_item"):
+                lines.append(f"- {text}")
+            else:
+                lines.append(text)
+    return "\n".join(lines)
+
+
+def get_incomplete_tasks():
+    body = {
+        "filter": {
+            "property": "完了",
+            "checkbox": {"equals": False}
+        }
+    }
+    res = notion_request("POST", f"/databases/{KANBAN_DB_ID}/query", body)
+    tasks = []
+    for page in res.get("results", []):
+        title = page["properties"]["タスク名"]["title"]
+        name = title[0]["plain_text"] if title else "（無題）"
+        tasks.append(name)
+    return tasks
+
+
+def get_monthly_report():
+    """今月の月次達成度を取得"""
+    today = date.today()
+    month_label = today.strftime("%-m月")
+    body = {
+        "filter": {
+            "property": "月",
+            "title": {"contains": month_label}
+        }
+    }
+    res = notion_request("POST", f"/databases/{MONTHLY_REPORT_DB_ID}/query", body)
+    results = res.get("results", [])
+    if not results:
+        return "（月次データなし）"
+
+    page = results[0]
+    props = page["properties"]
+    lines = [f"## {month_label}の実績"]
+    for key, val in props.items():
+        if key == "月":
+            continue
+        if val["type"] == "number" and val.get("number") is not None:
+            lines.append(f"- {key}: {val['number']}")
+        elif val["type"] == "rich_text":
+            text = val["rich_text"]
+            if text:
+                lines.append(f"- {key}: {text[0]['plain_text']}")
+    return "\n".join(lines)
+
+
 def get_week_label():
     today = date.today()
     monday = today - timedelta(days=today.weekday())
@@ -88,18 +130,31 @@ def get_week_label():
     return label, monday.isoformat()
 
 
-def generate_tasks_and_summary(existing_tasks):
+def generate_tasks_and_summary(memory, strategy, philosophy, self_image,
+                                monthly_report, existing_tasks):
     # 最新10件のみ参照（プロンプト長さを抑制）
     recent_tasks = existing_tasks[:10]
     task_list = "\n".join(f"- {t}" for t in recent_tasks) if recent_tasks else "（未完了タスクなし）"
 
     prompt = f"""あなたは経営者のビジネスアシスタントです。
-以下の戦略と現在の未完了タスクを踏まえて、今週の方針と取り組むべきサブタスクを生成してください。
+以下の資料を踏まえて、今週の方針と取り組むべきサブタスクを生成してください。
 
-## 戦略
-{STRATEGY}
+## 🧠 メモリー（気づき・文脈の蓄積）
+{memory}
 
-## 現在の未完了タスク（既存）
+## 📋 経営戦略2026
+{strategy}
+
+## 💭 哲学・価値観
+{philosophy}
+
+## 🪞 プロフェッショナルとしての自己像
+{self_image}
+
+## 📊 今月の達成度
+{monthly_report}
+
+## 現在の未完了タスク（既存・直近10件）
 {task_list}
 
 ## カテゴリ一覧
@@ -136,8 +191,6 @@ def generate_tasks_and_summary(existing_tasks):
 }}"""
 
     response = call_claude(prompt)
-
-    # JSON部分を抽出
     start = response.find("{")
     end = response.rfind("}") + 1
     json_str = response[start:end]
@@ -220,9 +273,6 @@ def create_weekly_plan(week_label, date_str, summary, themes, task_ids):
             "週": {
                 "title": [{"text": {"content": week_label}}]
             },
-            "Date": {
-                "date": {"start": date_str}
-            },
             "今週やること": {
                 "rich_text": [{"text": {"content": summary}}]
             },
@@ -259,13 +309,23 @@ def _markdown_to_blocks(md):
 
 def main():
     week_label, date_str = get_week_label()
-    print(f"=== 週次ブリーフ生成: {week_label} ===")
+    print(f"=== 週間プラン生成: {week_label} ===")
+
+    print("資料置き場を読み込み中...")
+    memory = get_page_text(MEMORY_PAGE_ID)
+    strategy = get_page_text(STRATEGY_PAGE_ID)
+    philosophy = get_page_text(PHILOSOPHY_PAGE_ID)
+    self_image = get_page_text(SELF_IMAGE_PAGE_ID)
+    monthly_report = get_monthly_report()
 
     existing_tasks = get_incomplete_tasks()
     print(f"既存の未完了タスク: {len(existing_tasks)}件")
 
     print("Claude APIで今週のタスクを生成中...")
-    result = generate_tasks_and_summary(existing_tasks)
+    result = generate_tasks_and_summary(
+        memory, strategy, philosophy, self_image,
+        monthly_report, existing_tasks
+    )
 
     summary = result["summary"]
     themes = result["themes"]
@@ -278,7 +338,7 @@ def main():
 
     print("週間プランを作成中...")
     url = create_weekly_plan(week_label, date_str, summary, themes, task_ids)
-    print(f"週次ブリーフ作成: {url}")
+    print(f"週間プラン作成: {url}")
     print("=== 完了 ===")
 
 

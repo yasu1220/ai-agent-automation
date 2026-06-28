@@ -1,0 +1,25 @@
+name: Dailyタスク選定
+
+on:
+  schedule:
+    # 毎朝6時（日本時間）= UTC 21時
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  select-daily-tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dailyタスク選定
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_KANBAN_DB_ID: ${{ secrets.NOTION_KANBAN_DB_ID }}
+          NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/select_daily_tasks.py
