@@ -5,7 +5,11 @@
 import os
 import json
 import urllib.request
-from datetime import date, timedelta
+from datetime import datetime, timezone, timedelta
+
+JST = timezone(timedelta(hours=9))
+def today_jst():
+    return datetime.now(JST).date()
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 KANBAN_DB_ID = os.environ["NOTION_KANBAN_DB_ID"]
@@ -94,7 +98,7 @@ def get_incomplete_tasks():
 
 def get_monthly_report():
     """今月の月次達成度を取得"""
-    today = date.today()
+    today = today_jst()
     month_label = today.strftime("%-m月")
     body = {
         "filter": {
@@ -123,7 +127,7 @@ def get_monthly_report():
 
 
 def get_week_label():
-    today = date.today()
+    today = today_jst()
     monday = today - timedelta(days=today.weekday())
     sunday = monday + timedelta(days=6)
     label = f"{monday.strftime('%Y/%-m/%-d')}-{sunday.strftime('%Y/%-m/%-d')}"

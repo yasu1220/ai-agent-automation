@@ -5,7 +5,11 @@ import os
 import json
 import urllib.request
 import urllib.error
-from datetime import date
+from datetime import datetime, timezone, timedelta
+
+JST = timezone(timedelta(hours=9))
+def today_jst():
+    return datetime.now(JST).date()
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 KANBAN_DB_ID = os.environ["NOTION_KANBAN_DB_ID"]

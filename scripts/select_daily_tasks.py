@@ -4,7 +4,12 @@
 import os
 import json
 import urllib.request
-from datetime import date
+from datetime import datetime, timezone, timedelta
+
+# 日本時間で今日の日付を取得
+JST = timezone(timedelta(hours=9))
+def today_jst():
+    return datetime.now(JST).date()
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 KANBAN_DB_ID = os.environ["NOTION_KANBAN_DB_ID"]
@@ -104,7 +109,7 @@ def select_tasks_with_claude(tasks):
 
 def get_or_create_today_daily():
     """今日のDailyタスクページを取得または作成"""
-    today = date.today()
+    today = today_jst()
     label = today.strftime("%-m/%-d")
 
     # 既存ページを検索
@@ -147,7 +152,7 @@ def add_tasks_to_daily(daily_page_id, selected_tasks):
 
 
 def main():
-    today = date.today().isoformat()
+    today = today_jst().isoformat()
     print(f"=== Dailyタスク選定: {today} ===")
 
     tasks = get_incomplete_tasks()

@@ -4,7 +4,11 @@
 import os
 import json
 import urllib.request
-from datetime import date, timedelta
+from datetime import datetime, timezone, timedelta
+
+JST = timezone(timedelta(hours=9))
+def today_jst():
+    return datetime.now(JST).date()
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 DAILY_DB_ID = os.environ["NOTION_DAILY_DB_ID"]
@@ -48,7 +52,7 @@ def call_claude(prompt):
 
 def get_yesterday_daily_memo():
     """前日のDailyタスクのメモを取得"""
-    yesterday = (date.today() - timedelta(days=1)).strftime("%-m/%-d")
+    yesterday = (today_jst() - timedelta(days=1)).strftime("%-m/%-d")
     body = {
         "filter": {
             "property": "日付",
