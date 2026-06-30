@@ -51,9 +51,6 @@ def create_daily_memo(tasks):
             "日付": {
                 "title": [{"text": {"content": today}}]
             },
-            "Date": {
-                "date": {"start": today}
-            },
             "タスク": {
                 "relation": relations
             }
