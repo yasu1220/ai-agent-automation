@@ -1,26 +1,6 @@
-name: 日次メモ自動生成
+# このワークフローはselect_daily_tasks.ymlに統合されたため無効化済み
+# （削除してください）
+name: 日次メモ自動生成（廃止）
 
 on:
-  schedule:
-    # 毎朝8時（日本時間）= UTC 23時（前日）
-    - cron: '0 23 * * *'
-  workflow_dispatch:  # 手動実行も可能
-
-jobs:
-  create-daily-memo:
-    runs-on: ubuntu-latest
-    steps:
-      - name: リポジトリをチェックアウト
-        uses: actions/checkout@v4
-
-      - name: Python セットアップ
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: 日次メモ作成
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_KANBAN_DB_ID: ${{ secrets.NOTION_KANBAN_DB_ID }}
-          NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
-        run: python scripts/create_daily_memo.py
+  workflow_dispatch:  # 定期実行を削除、手動のみ残す（実質無効）

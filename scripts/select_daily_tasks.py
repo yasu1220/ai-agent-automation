@@ -1,5 +1,7 @@
 """
-毎朝6時実行: カンバンの未完了タスクから3件選んでDailyタスクに追加する
+毎朝6時実行: カンバンの未完了タスクからClaudeが3件選定し、
+今日のDailyページを新規作成（なければ）してリレーションに追加する。
+（旧: create_daily_memo.py + select_daily_tasks.py を統合）
 """
 import os
 import json
