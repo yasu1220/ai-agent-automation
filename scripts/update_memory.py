@@ -134,7 +134,7 @@ def update_memory_page(new_content):
 
 
 def main():
-    today = date.today().isoformat()
+    today = today_jst().isoformat()
     print(f"=== メモリー更新: {today} ===")
 
     daily_memo = get_yesterday_daily_memo()
