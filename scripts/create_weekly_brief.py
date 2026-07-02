@@ -54,7 +54,10 @@ def call_claude(prompt):
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req) as res:
         result = json.loads(res.read())
-        return result["content"][0]["text"]
+        for block in result["content"]:
+            if block.get("type") == "text":
+                return block["text"]
+        raise ValueError(f"No text block in response: {result}")
 
 
 def get_page_text(page_id):
